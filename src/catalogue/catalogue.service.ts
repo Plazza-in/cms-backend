@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { Pool } from 'pg';
 import { Catalogue } from './catalogue.entity';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
@@ -26,6 +27,95 @@ export class CatalogueService {
         } : false,
       });
     }
+  }
+
+  async searchElasticsearch(q: string, size = 10) {
+    const ES_URL = this.configService.get<string>('ES_URL') || 'http://localhost:9200';
+    const ES_INDEX = this.configService.get<string>('ES_CATALOGUE_INDEX') || 'catalogue';
+    const endpoint = `${ES_URL.replace(/\/$/, '')}/${ES_INDEX}/_search`;
+
+    const query = q?.toString().trim();
+    if (!query) return { total: 0, items: [] };
+
+    const body = {
+      size,
+      query: {
+        bool: {
+          should: [
+            { term: { 'product_id': { value: query, boost: 10 } } },
+            { prefix: { 'product_id': { value: query.toUpperCase(), boost: 5 } } },
+            { term: { 'dist_item_code': { value: query, boost: 6 } } },
+            { prefix: { 'dist_item_code': { value: query.toUpperCase(), boost: 3 } } },
+            {
+              multi_match: {
+                query,
+                type: 'best_fields',
+                fields: [
+                  'name^4',
+                  'name.edge_ngram^6',
+                  'name.ngram^3',
+                  'name.no_space^2',
+                  'salt_composition^1',
+                ],
+              },
+            },
+            { match_phrase_prefix: { name: { query, slop: 2, boost: 5 } } },
+            { term: { 'c3.values.keyword': { value: query, boost: 8 } } },
+          ],
+          minimum_should_match: 1,
+        },
+      },
+      _source: [
+        'product_id',
+        'name',
+        'brand',
+        'inventory_quantity',
+        'product_category_id',
+        'product_use_case_id',
+        'product_sub_category_id',
+        'dist_item_code',
+        'salt_composition',
+        'c3.values',
+        'image_url',
+        'mrp',
+        'plazza_selling_price_incl_gst',
+      ],
+    } as const;
+
+    const resp = await axios.post(endpoint, body, { headers: { 'Content-Type': 'application/json' } });
+    const data: any = resp.data;
+    const items = (data?.hits?.hits ?? []).map((h: any) => ({ id: h._id, score: h._score, ...h._source }));
+    const total = typeof data?.hits?.total?.value === 'number' ? data.hits.total.value : (items?.length ?? 0);
+    return { total, items };
+  }
+
+  async searchElasticsearchByProductId(product_id: string) {
+    const ES_URL = this.configService.get<string>('ES_URL') || 'http://localhost:9200';
+    const ES_INDEX = this.configService.get<string>('ES_CATALOGUE_INDEX') || 'catalogue';
+    const endpoint = `${ES_URL.replace(/\/$/, '')}/${ES_INDEX}/_search`;
+
+    const query = product_id?.toString().trim();
+    if (!query) return { found: false } as const;
+
+    const body = {
+      size: 1,
+      query: {
+        bool: {
+          should: [
+            { term: { 'product_id': { value: query, boost: 10 } } },
+            { term: { 'product_id.keyword': { value: query, boost: 10 } } },
+          ],
+          minimum_should_match: 1,
+        },
+      },
+      _source: true,
+    } as const;
+
+    const resp = await axios.post(endpoint, body, { headers: { 'Content-Type': 'application/json' } });
+    const data: any = resp.data;
+    const hit = (data?.hits?.hits ?? [])[0];
+    if (!hit) return { found: false } as const;
+    return { found: true, id: hit._id, score: hit._score, ...hit._source } as const;
   }
 
   async findAll(limit = 50, offset = 0, searchTerm?: string): Promise<Catalogue[]> {

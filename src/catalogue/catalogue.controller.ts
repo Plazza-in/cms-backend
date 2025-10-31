@@ -29,6 +29,19 @@ export class CatalogueController {
     return this.service.findAll(Number(limit), Number(offset), term);
   }
 
+  @Get('search-es')
+  searchEs(
+    @Query('q') q: string,
+    @Query('size') size = '10',
+  ) {
+    return this.service.searchElasticsearch(q, Number(size));
+  }
+
+  @Get('search-es/:product_id')
+  searchEsById(@Param('product_id') product_id: string) {
+    return this.service.searchElasticsearchByProductId(product_id);
+  }
+
   @Get(':product_id')
   get(@Param('product_id') product_id: string) {
     return this.service.findOne(product_id);

@@ -215,8 +215,8 @@ export class Catalogue {
   @Column({ name: 'is_active', type: 'boolean', default: () => 'false' })
   is_active: boolean;
 
-  @Column({ name: 'deferred_allowed', type: 'boolean', default: () => 'false' })
-  deferred_allowed: boolean;
+  @Column({ name: 'deferred_allowed', type: 'boolean', nullable: true, select: false, insert: false, update: false })
+  deferred_allowed?: boolean | null;
 }
 
 

@@ -17,6 +17,8 @@ import { ContentService } from './content.service';
 import { HealthModule } from './health.module';
 import { HealthController } from './health.controller';
 import { CatalogueModule } from './catalogue/catalogue.module';
+import { TaxonomyModule } from './taxonomy/taxonomy.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { CatalogueModule } from './catalogue/catalogue.module';
     ContentModule,
     HealthModule,
     CatalogueModule,
+    TaxonomyModule,
+    UploadsModule,
   ],
   controllers: [AppController, UsersController, AuthController, ContentController, HealthController],
   providers: [AppService, UsersService, AuthService, ContentService],
